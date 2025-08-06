@@ -1,0 +1,20 @@
+{
+  "default": [
+    { "min": 0, "max": 0.2, "phase": "Ukuran terlalu kecil atau belum dapat diklasifikasikan" },
+    { "min": 0.2, "max": 1.5, "phase": "Early Juvenile (Usia 1–7 minggu)" },
+    { "min": 1.5, "max": 16, "phase": "Juvenile (Usia sampai 1 tahun)" },
+    { "min": 16, "max": 999, "phase": "Adult (Usia lebih dari 1 tahun)" }
+  ],
+  "Holothuria scabra": [
+    { "min": 0, "max": 0.2, "phase": "Ukuran terlalu kecil" },
+    { "min": 0.2, "max": 1.5, "phase": "Early Juvenile (1-7 minggu)" },
+    { "min": 1.5, "max": 16, "phase": "Juvenile (sampai 1 tahun)" },
+    { "min": 16, "max": 999, "phase": "Adult (>1 tahun)" }
+  ],
+  "Apostichopus japonicus": [
+    { "min": 0, "max": 0.5, "phase": "Larva" },
+    { "min": 0.5, "max": 3, "phase": "Juvenile muda" },
+    { "min": 3, "max": 20, "phase": "Juvenile" },
+    { "min": 20, "max": 999, "phase": "Adult" }
+  ]
+}

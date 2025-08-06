@@ -1,0 +1,92 @@
+{
+    "Holothuria scabra": {
+        "linf": 40.0,
+        "k": 0.3,
+        "commonName": "Teripang Pasir",
+        "description": "Spesies teripang yang umum ditemukan di perairan dangkal berpasir"
+    },
+    "Holothuria atra": {
+        "linf": 60.0,
+        "k": 0.75,
+        "commonName": "Teripang Hitam",
+        "description": "Spesies teripang dengan tubuh berwarna hitam, hidup di terumbu karang dan ekosistem lamun"
+    },
+    "Holothuria coluber": {
+        "linf": 60.0,
+        "k": 0.75,
+        "commonName": "Snake fish",
+        "description": "Spesies teripang ramping, hitam, panjang seperti ular"
+    },
+    "Holothuria fuscocinerea": {
+        "linf": 25.0,
+        "k": 0.2,
+        "commonName": "Teripang abu-abu",
+        "description": "Spesies teripang besar, abu-abu kecokelatan, ditutupi papila kecil"
+    },
+    "Holothuria hilla": {
+        "linf": 25.0,
+        "k": 0.2,
+        "commonName": "Teripang ekor macan",
+        "description": "Spesies teripang putih-cokelat, bergaris, mirip ekor harimau"
+    },
+    "Stichopus vastus": {
+        "linf": 31.0,
+        "k": 0.3,
+        "commonName": "Teripang kasur/Zebrafish",
+        "description": "Spesies teripang besar, cokelat, berkulit tebal, menyerupai kasur."
+    },
+    "Actinopyga miliaris": {
+        "linf": 35.0,
+        "k": 0.3,
+        "commonName": "Teripang kapuk/lotong",
+        "description": "Spesies teripang hitam pekat, kulitnya berkerut dan terdapat bulut halus, mirip kapuk."
+    },
+    "Bohadschia similis": {
+        "linf": 26.0,
+        "k": 0.2,
+        "commonName": "Teripang pasir bintik coklat",
+        "description": "Spesies teripang laut yang panjang, berwarna cokelat dan memiliki bintik putih."
+    },
+    "Synapta maculata": {
+        "linf": 200.0,
+        "k": 0.2,
+        "commonName": "Teripang ular",
+        "description": "Spesies teripang terpanjang, tinggal di pasir atau padang lamun, makan dengan tentakel."
+    },
+    "Stichopus horrens": {
+        "linf": 90.0,
+        "k": 0.8,
+        "commonName": "Teripang kacang goreng",
+        "description": "Spesies teripang dengan dinding tubuh tebal, kaku, dan persegi, dengan banyak kutil dan papila."
+    },
+    "Holothuria edulis": {
+        "linf": 35.0,
+        "k": 0.3,
+        "commonName": "Teripang merah muda",
+        "description": "Spesies teripang yang umumnya ditemukan di perairan dangkal, terumbu karang, dan padang lamun."
+    },
+    "Stichopus herrmanni": {
+        "linf": 55.0,
+        "k": 0.7,
+        "commonName": "Teripang emas/gama",
+        "description": "Spesies teripang besar, tubuh silindris dengan papila jingga-coklat."
+    },
+    "Bohadschia vitiensis": {
+        "linf": 50.0,
+        "k": 0.6,
+        "commonName": "Teripang coklat/olok-olok",
+        "description": "Spesies teripang besar, tubuh silindris kekuningan dengan bintik coklat karakteristik."
+    },
+    "Holothuria leucospilota": {
+        "linf": 60.0,
+        "k": 0.7,
+        "commonName": "Teripang getah hitam",
+        "description": "Spesies teripang ramping, hitam, panjang, dan sangat elastis seperti jelly"
+    },
+    "Bohadschia marmorata": {
+        "linf": 40.0,
+        "k": 0.35,
+        "commonName": "Teripang pulut putih",
+        "description": "Spesies teripang keluar malam hari, hidup di pasir karang dan padang lamun"
+    }
+}
