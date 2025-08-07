@@ -150,272 +150,6 @@ function initializeApp() {
   updateStatistics();
 }
 
-// Fungsi baru untuk analisis multispecies
-function calculateMultispeciesAnalysis() {
-  if (csvData.length === 0) {
-    alert("Silakan unggah file CSV dengan data multispecies!");
-    return;
-  }
-
-  const doAge = document.getElementById('chk-age').checked;
-  const doLWR = document.getElementById('chk-lwr').checked;
-
-  if (!doAge && !doLWR) {
-    alert("Pilih setidaknya satu jenis analisis!");
-    return;
-  }
-
-  showLoading(true);
-
-  setTimeout(() => {
-    try {
-      // Kelompokkan data per spesies
-      const speciesGroups = {};
-      csvData.forEach(item => {
-        if (!speciesGroups[item.species]) {
-          speciesGroups[item.species] = [];
-        }
-        speciesGroups[item.species].push(item);
-      });
-
-      calculationResults = [];
-
-      // Untuk setiap spesies, lakukan analisis yang dipilih
-      Object.keys(speciesGroups).forEach(species => {
-        const groupData = speciesGroups[species];
-        const result = {
-          species: species,
-          lengthData: groupData.map(d => d.length),
-          weightData: groupData.map(d => d.weight)
-        };
-
-        // Hitung statistik dasar
-        const lengthStats = calculateStatistics(result.lengthData);
-        result.avgLength = lengthStats.avg;
-        result.minLength = lengthStats.min;
-        result.maxLength = lengthStats.max;
-
-        const weightStats = calculateStatistics(result.weightData);
-        result.avgWeight = weightStats.avg;
-
-        // Jika analisis usia dipilih
-        if (doAge) {
-          // Ambil parameter dari database jika ada
-          const speciesParams = speciesDatabase[species] || {};
-          const linf = speciesParams.linf || parseFloat(document.getElementById("linf").value) || 30.66;
-          const k = speciesParams.k || parseFloat(document.getElementById("k").value) || 0.34;
-
-          // Hitung usia untuk setiap panjang
-          const ages = [];
-          groupData.forEach(data => {
-            const Lt = data.length;
-            if (Lt < linf) {
-              const t = -(1 / k) * Math.log(1 - (Lt / linf));
-              ages.push(t);
-            }
-          });
-
-          if (ages.length > 0) {
-            const ageStats = calculateStatistics(ages);
-            result.avgAge = ageStats.avg;
-          } else {
-            result.avgAge = null;
-          }
-        }
-
-        // Jika analisis LWR dipilih
-        if (doLWR) {
-          // Gunakan data seluruh grup untuk menghitung parameter LWR
-          const log10Length = groupData.map(d => Math.log10(d.length));
-          const log10Weight = groupData.map(d => Math.log10(d.weight));
-
-          const regressionData = log10Length.map((val, idx) => [val, log10Weight[idx]]);
-          const resultReg = regression.linear(regressionData);
-          const b = resultReg.equation[0];
-          const a = Math.pow(10, resultReg.equation[1]);
-
-          result.a = a;
-          result.b = b;
-
-          // Tentukan pola pertumbuhan berdasarkan b
-          if (b < 2.5) {
-            result.growthPattern = "Allometrik negatif (lebih memanjang)";
-          } else if (b > 3.5) {
-            result.growthPattern = "Allometrik positif (lebih menggemuk)";
-          } else {
-            result.growthPattern = "Isometrik (proporsional)";
-          }
-
-          // Hitung faktor kondisi per data, lalu rata-rata
-          const conditionFactors = groupData.map(d => {
-            return (d.weight / Math.pow(d.length, 3)) * 100;
-          });
-          const conditionStats = calculateStatistics(conditionFactors);
-          result.avgCondition = conditionStats.avg;
-
-          // Interpretasi kondisi
-          if (result.avgCondition >= 1.2) {
-            result.conditionInterpretation = "Kondisi sangat baik";
-          } else if (result.avgCondition >= 1.0) {
-            result.conditionInterpretation = "Kondisi baik";
-          } else if (result.avgCondition >= 0.8) {
-            result.conditionInterpretation = "Kondisi cukup";
-          } else {
-            result.conditionInterpretation = "Kondisi kurang";
-          }
-        }
-
-        calculationResults.push(result);
-      });
-
-      displayMultispeciesResults();
-      renderMultispeciesChart();
-
-    } catch (error) {
-      alert("Error dalam perhitungan multispecies: " + error.message);
-    } finally {
-      showLoading(false);
-    }
-  }, 1000);
-}
-
-// Fungsi untuk menampilkan hasil multispecies
-function displayMultispeciesResults() {
-  const tableBody = document.getElementById("multispeciesBody");
-  tableBody.innerHTML = "";
-
-  calculationResults.forEach(result => {
-    const row = document.createElement("tr");
-
-    let ageCell = "N/A";
-    if (result.avgAge !== undefined && result.avgAge !== null) {
-      ageCell = result.avgAge.toFixed(2);
-    }
-
-    let growthCell = "N/A";
-    if (result.growthPattern) {
-      growthCell = result.growthPattern;
-    }
-
-    let conditionCell = "N/A";
-    if (result.avgCondition !== undefined) {
-      conditionCell = `${result.conditionInterpretation} (${result.avgCondition.toFixed(2)})`;
-    }
-
-    row.innerHTML = `
-      <td>${result.species}</td>
-      <td>${result.avgLength.toFixed(2)}</td>
-      <td>${result.avgWeight.toFixed(2)}</td>
-      <td>${ageCell}</td>
-      <td>${growthCell}</td>
-      <td>${conditionCell}</td>
-    `;
-    tableBody.appendChild(row);
-  });
-}
-
-// Fungsi untuk menampilkan grafik multispecies
-function renderMultispeciesChart() {
-  const ctx = document.getElementById("mainChart").getContext("2d");
-  if (myChart) {
-    myChart.destroy();
-  }
-
-  // Siapkan dataset untuk setiap spesies
-  const datasets = [];
-  const colors = ['#2c6fbb', '#4caf50', '#ff9800', '#dc3545', '#6c757d']; // Warna berbeda untuk setiap spesies
-
-  calculationResults.forEach((result, index) => {
-    const scatterData = [];
-    for (let i = 0; i < result.lengthData.length; i++) {
-      scatterData.push({
-        x: result.lengthData[i],
-        y: result.weightData[i]
-      });
-    }
-
-    datasets.push({
-      label: result.species,
-      data: scatterData,
-      backgroundColor: colors[index % colors.length],
-      pointRadius: 5,
-      pointHoverRadius: 7
-    });
-  });
-
-  myChart = new Chart(ctx, {
-    type: 'scatter',
-    data: {
-      datasets: datasets
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      scales: {
-        x: {
-          title: {
-            display: true,
-            text: 'Panjang (cm)'
-          },
-          type: 'linear',
-          position: 'bottom'
-        },
-        y: {
-          title: {
-            display: true,
-            text: 'Berat (gram)'
-          }
-        }
-      },
-      plugins: {
-        legend: {
-          position: 'top'
-        },
-        tooltip: {
-          callbacks: {
-            label: function(context) {
-              const point = context.raw;
-              return `${context.dataset.label}: ${point.x.toFixed(2)} cm, ${point.y.toFixed(2)} g`;
-            }
-          }
-        }
-      }
-    }
-  });
-
-  document.getElementById("downloadChartBtn").style.display = "block";
-}
-
-// Fungsi untuk download hasil multispecies
-function downloadMultispeciesResults() {
-  if (calculationResults.length === 0) {
-    alert("Tidak ada data untuk diunduh. Silakan hitung analisis terlebih dahulu.");
-    return;
-  }
-
-  let csvContent = "Spesies,Rata-rata Panjang (cm),Rata-rata Berat (g),Rata-rata Usia (tahun),Pola Pertumbuhan,Faktor Kondisi\n";
-
-  calculationResults.forEach(result => {
-    let age = result.avgAge !== undefined && result.avgAge !== null ? result.avgAge.toFixed(2) : 'N/A';
-    let growth = result.growthPattern || 'N/A';
-    let condition = result.avgCondition !== undefined ? `${result.conditionInterpretation} (${result.avgCondition.toFixed(2)})` : 'N/A';
-
-    csvContent += `"${result.species}",${result.avgLength.toFixed(2)},${result.avgWeight.toFixed(2)},${age},"${growth}","${condition}"\n`;
-  });
-
-  const blob = new Blob([csvContent], {
-    type: 'text/csv;charset=utf-8;'
-  });
-  const link = document.createElement("a");
-  const url = URL.createObjectURL(blob);
-  link.setAttribute("href", url);
-  link.setAttribute("download", "analisis_multispecies_teripang.csv");
-  link.style.visibility = 'hidden';
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-}
-
 function switchMode(mode) {
   // Update active button
   document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
@@ -437,7 +171,6 @@ function switchMode(mode) {
   resultTable.classList.add('hidden');
   multispeciesTable.classList.add('hidden');
 
-
   if (mode === 'age') {
     ageParams.classList.remove('hidden');
     resultTable.classList.remove('hidden');
@@ -446,6 +179,11 @@ function switchMode(mode) {
     document.getElementById('stat-title').textContent = 'Statistik Data Panjang';
     document.getElementById('chart-title').textContent = 'Visualisasi Pertumbuhan';
     document.getElementById('result-table-title').textContent = 'Hasil Prediksi Usia';
+    
+    // Update CSV format info
+    document.getElementById('csv-format-info').innerHTML = `
+      <strong>Mode Prediksi Usia:</strong> File CSV harus berisi satu kolom panjang Teripang dalam satuan cm.
+    `;
 
     document.getElementById('tableHeader').innerHTML = `
       <tr>
@@ -462,6 +200,11 @@ function switchMode(mode) {
     document.getElementById('stat-title').textContent = 'Statistik Data Input';
     document.getElementById('chart-title').textContent = 'Hubungan Panjang-Berat';
     document.getElementById('result-table-title').textContent = 'Hasil Analisis LWR & Fulton';
+    
+    // Update CSV format info
+    document.getElementById('csv-format-info').innerHTML = `
+      <strong>Mode Analisis LWR:</strong> File CSV harus berisi dua kolom: panjang (cm) dan berat (gram).
+    `;
 
     document.getElementById('tableHeader').innerHTML = `
       <tr>
@@ -478,6 +221,12 @@ function switchMode(mode) {
     document.getElementById('stat-title').textContent = 'Statistik Data Multispecies';
     document.getElementById('chart-title').textContent = 'Grafik Hubungan Panjang-Berat Multispecies';
     document.getElementById('result-table-title').textContent = 'Hasil Analisis Multispecies';
+    
+    // Update CSV format info
+    document.getElementById('csv-format-info').innerHTML = `
+      <strong>Mode Analisis Multispecies:</strong> File CSV harus berisi tiga kolom: spesies, panjang (cm), dan berat (gram).<br>
+      Format: <code>Holothuria scabra,15.5,25.2</code>
+    `;
   }
 
   // Reset data and UI
@@ -489,6 +238,408 @@ function switchMode(mode) {
   updateStatistics();
 }
 
+// Main calculation function that routes to appropriate analysis
+function calculateAnalysis() {
+  if (csvData.length === 0) {
+    alert("Silakan unggah file CSV dengan data teripang!");
+    return;
+  }
+  
+  if (currentMode === 'multispecies') {
+    calculateMultispeciesAnalysis();
+  } else {
+    showLoading(true);
+    setTimeout(() => {
+      try {
+        if (currentMode === 'age') {
+          calculateAgeAnalysis();
+        } else { // LWR mode
+          calculateLWRAnalysis();
+        }
+      } catch (error) {
+        alert("Error dalam perhitungan: " + error.message);
+      } finally {
+        showLoading(false);
+      }
+    }, 1000);
+  }
+}
+
+// Fixed multispecies analysis function
+function calculateMultispeciesAnalysis() {
+  const doAge = document.getElementById('chk-age').checked;
+  const doLWR = document.getElementById('chk-lwr').checked;
+  const location = document.getElementById('location').value.trim();
+
+  if (!doAge && !doLWR) {
+    alert("Pilih setidaknya satu jenis analisis!");
+    return;
+  }
+
+  if (!location) {
+    alert("Mohon masukkan lokasi pengambilan sampel!");
+    return;
+  }
+
+  showLoading(true);
+
+  setTimeout(() => {
+    try {
+      // Group data by species
+      const speciesGroups = {};
+      csvData.forEach(item => {
+        if (!speciesGroups[item.species]) {
+          speciesGroups[item.species] = [];
+        }
+        speciesGroups[item.species].push(item);
+      });
+
+      calculationResults = [];
+
+      // Process each species
+      Object.keys(speciesGroups).forEach(species => {
+        const groupData = speciesGroups[species];
+        const result = {
+          species: species,
+          location: location,
+          lengthData: groupData.map(d => d.length),
+          weightData: groupData.map(d => d.weight),
+          count: groupData.length
+        };
+
+        // Calculate basic statistics
+        const lengthStats = calculateStatistics(result.lengthData);
+        const weightStats = calculateStatistics(result.weightData);
+        
+        result.avgLength = lengthStats.avg;
+        result.minLength = lengthStats.min;
+        result.maxLength = lengthStats.max;
+        result.avgWeight = weightStats.avg;
+        result.minWeight = weightStats.min;
+        result.maxWeight = weightStats.max;
+
+        // Age analysis if selected
+        if (doAge) {
+          // Get species parameters from database or use defaults
+          const speciesParams = speciesDatabase[species] || {};
+          const linf = speciesParams.linf || parseFloat(document.getElementById("linf").value) || 30.66;
+          const k = speciesParams.k || parseFloat(document.getElementById("k").value) || 0.34;
+
+          // Calculate age for each individual
+          const ages = [];
+          groupData.forEach(data => {
+            const Lt = data.length;
+            if (Lt < linf) {
+              const t = -(1 / k) * Math.log(1 - (Lt / linf));
+              if (t > 0) ages.push(t);
+            }
+          });
+
+          if (ages.length > 0) {
+            const ageStats = calculateStatistics(ages);
+            result.avgAge = ageStats.avg;
+            result.minAge = ageStats.min;
+            result.maxAge = ageStats.max;
+          } else {
+            result.avgAge = null;
+            result.minAge = null;
+            result.maxAge = null;
+          }
+        }
+
+        // LWR analysis if selected
+        if (doLWR && groupData.length >= 3) {
+          // Use log10 transformation for LWR calculation
+          const log10Length = groupData.map(d => Math.log10(d.length));
+          const log10Weight = groupData.map(d => Math.log10(d.weight));
+
+          const regressionData = log10Length.map((val, idx) => [val, log10Weight[idx]]);
+          const resultReg = regression.linear(regressionData);
+          const b = resultReg.equation[0];
+          const a = Math.pow(10, resultReg.equation[1]);
+
+          result.a = a;
+          result.b = b;
+          result.r2 = resultReg.r2;
+
+          // Determine growth pattern based on b value
+          if (b < 2.5) {
+            result.growthPattern = "Alometrik negatif";
+          } else if (b > 3.5) {
+            result.growthPattern = "Alometrik positif";
+          } else {
+            result.growthPattern = "Isometrik";
+          }
+
+          // Calculate condition factors
+          const conditionFactors = groupData.map(d => {
+            return (d.weight / Math.pow(d.length, 3)) * 100;
+          });
+          
+          const conditionStats = calculateStatistics(conditionFactors);
+          result.avgCondition = conditionStats.avg;
+          
+          // Count individuals with good condition (K >= 1.0)
+          const goodConditionCount = conditionFactors.filter(k => k >= 1.0).length;
+          result.goodConditionCount = goodConditionCount;
+          result.goodConditionPercentage = (goodConditionCount / conditionFactors.length) * 100;
+
+          // Interpret condition
+          if (result.avgCondition >= 1.2) {
+            result.conditionInterpretation = "Kondisi Sangat Baik";
+          } else if (result.avgCondition >= 1.0) {
+            result.conditionInterpretation = "Kondisi Baik";
+          } else if (result.avgCondition >= 0.8) {
+            result.conditionInterpretation = "Kondisi Cukup";
+          } else {
+            result.conditionInterpretation = "Kondisi Kurang";
+          }
+        }
+
+        calculationResults.push(result);
+      });
+
+      displayMultispeciesResults();
+      renderMultispeciesChart();
+      updateMultispeciesStatistics();
+
+    } catch (error) {
+      console.error("Error in multispecies calculation:", error);
+      alert("Error dalam perhitungan multispecies: " + error.message);
+    } finally {
+      showLoading(false);
+    }
+  }, 1000);
+}
+
+// Display multispecies results in table
+function displayMultispeciesResults() {
+  const tableBody = document.getElementById("multispeciesBody");
+  const tableFooter = document.getElementById("multispeciesFooter");
+  tableBody.innerHTML = "";
+
+  calculationResults.forEach(result => {
+    const row = document.createElement("tr");
+
+    let ageCell = "N/A";
+    if (result.avgAge !== undefined && result.avgAge !== null) {
+      ageCell = result.avgAge.toFixed(2) + " tahun";
+    }
+
+    let growthCell = "N/A";
+    if (result.growthPattern) {
+      growthCell = result.growthPattern;
+    }
+
+    let conditionCell = "N/A";
+    if (result.avgCondition !== undefined && result.conditionInterpretation) {
+      conditionCell = `${result.conditionInterpretation} (${result.avgCondition.toFixed(2)} ≥ 1.0): ${result.goodConditionCount} individu (${result.goodConditionPercentage.toFixed(1)}%)`;
+    }
+
+    row.innerHTML = `
+      <td><strong>${result.species}</strong></td>
+      <td>${result.avgLength.toFixed(2)}</td>
+      <td>${result.avgWeight.toFixed(2)}</td>
+      <td>${ageCell}</td>
+      <td>${growthCell}</td>
+      <td>${conditionCell}</td>
+    `;
+    tableBody.appendChild(row);
+  });
+
+  if (calculationResults.length > 0) {
+    tableFooter.style.display = "";
+    const paginationCell = tableFooter.querySelector(".pagination-info");
+    paginationCell.innerHTML = `Menampilkan ${calculationResults.length} spesies dari lokasi: <strong>${calculationResults[0].location}</strong>`;
+    paginationCell.setAttribute('colspan', '6');
+  }
+}
+
+// Render multispecies chart with regression lines
+function renderMultispeciesChart() {
+  const ctx = document.getElementById("mainChart").getContext("2d");
+  if (myChart) {
+    myChart.destroy();
+  }
+
+  const datasets = [];
+  const colors = ['#2c6fbb', '#4caf50', '#ff9800', '#dc3545', '#6c757d', '#17a2b8', '#6f42c1'];
+
+  calculationResults.forEach((result, index) => {
+    const color = colors[index % colors.length];
+    
+    // Scatter plot data
+    const scatterData = [];
+    for (let i = 0; i < result.lengthData.length; i++) {
+      scatterData.push({
+        x: result.lengthData[i],
+        y: result.weightData[i]
+      });
+    }
+
+    datasets.push({
+      label: `${result.species} (Data)`,
+      data: scatterData,
+      backgroundColor: color,
+      borderColor: color,
+      pointRadius: 5,
+      pointHoverRadius: 7,
+      showLine: false
+    });
+
+    // Add regression line if LWR analysis was done
+    if (result.a && result.b) {
+      const minLength = Math.min(...result.lengthData);
+      const maxLength = Math.max(...result.lengthData);
+      const regressionLine = [];
+      
+      for (let length = minLength; length <= maxLength; length += 0.5) {
+        const weight = result.a * Math.pow(length, result.b);
+        regressionLine.push({ x: length, y: weight });
+      }
+
+      datasets.push({
+        label: `${result.species} (Regresi)`,
+        data: regressionLine,
+        borderColor: color,
+        backgroundColor: 'transparent',
+        borderWidth: 2,
+        pointRadius: 0,
+        showLine: true,
+        borderDash: [5, 5]
+      });
+    }
+  });
+
+  myChart = new Chart(ctx, {
+    type: 'scatter',
+    data: { datasets: datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: {
+          title: {
+            display: true,
+            text: 'Panjang (cm)'
+          },
+          type: 'linear',
+          position: 'bottom'
+        },
+        y: {
+          title: {
+            display: true,
+            text: 'Berat (gram)'
+          }
+        }
+      },
+      plugins: {
+        legend: {
+          position: 'top',
+          labels: {
+            usePointStyle: true,
+            padding: 20
+          }
+        },
+        tooltip: {
+          callbacks: {
+            label: function(context) {
+              const point = context.raw;
+              return `${context.dataset.label}: ${point.x.toFixed(2)} cm, ${point.y.toFixed(2)} g`;
+            }
+          }
+        }
+      }
+    }
+  });
+
+  document.getElementById("downloadChartBtn").style.display = "block";
+}
+
+// Update statistics for multispecies
+function updateMultispeciesStatistics() {
+  const statBox = document.getElementById("resultStatBox");
+  
+  if (calculationResults.length === 0) return;
+
+  // Calculate overall statistics across all species
+  const totalSamples = calculationResults.reduce((sum, result) => sum + result.count, 0);
+  const allLengths = calculationResults.flatMap(result => result.lengthData);
+  const allWeights = calculationResults.flatMap(result => result.weightData);
+  
+  const lengthStats = calculateStatistics(allLengths);
+  const weightStats = calculateStatistics(allWeights);
+
+  statBox.innerHTML = `
+    <div class="stat-item">
+      <div class="stat-label">Total Spesies</div>
+      <div class="stat-value">${calculationResults.length}</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-label">Total Sampel</div>
+      <div class="stat-value">${totalSamples}</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-label">Rentang Panjang</div>
+      <div class="stat-value">${lengthStats.min.toFixed(2)} - ${lengthStats.max.toFixed(2)}</div>
+      <div class="stat-label">cm</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-label">Rentang Berat</div>
+      <div class="stat-value">${weightStats.min.toFixed(2)} - ${weightStats.max.toFixed(2)}</div>
+      <div class="stat-label">gram</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-label">Rata-rata Panjang</div>
+      <div class="stat-value">${lengthStats.avg.toFixed(2)}</div>
+      <div class="stat-label">cm</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-label">Rata-rata Berat</div>
+      <div class="stat-value">${weightStats.avg.toFixed(2)}</div>
+      <div class="stat-label">gram</div>
+    </div>
+  `;
+
+  document.getElementById("result-stat-title").textContent = "Statistik Analisis Multispecies";
+  document.getElementById("resultsStatsCard").style.display = "block";
+}
+
+// Download multispecies results
+function downloadMultispeciesResults() {
+  if (calculationResults.length === 0) {
+    alert("Tidak ada data untuk diunduh. Silakan hitung analisis terlebih dahulu.");
+    return;
+  }
+
+  const location = calculationResults[0].location || "Unknown";
+  let csvContent = `Lokasi Pengambilan Sampel: ${location}\n\n`;
+  csvContent += "Spesies,Rata-rata Panjang (cm),Rata-rata Berat (g),Rata-rata Usia (tahun),Pola Pertumbuhan,Faktor Kondisi\n";
+
+  calculationResults.forEach(result => {
+    let age = result.avgAge !== undefined && result.avgAge !== null ? result.avgAge.toFixed(2) : 'N/A';
+    let growth = result.growthPattern || 'N/A';
+    let condition = result.avgCondition !== undefined ? 
+      `${result.conditionInterpretation} (${result.avgCondition.toFixed(2)} ≥ 1.0): ${result.goodConditionCount} individu (${result.goodConditionPercentage.toFixed(1)}%)` : 
+      'N/A';
+
+    csvContent += `"${result.species}",${result.avgLength.toFixed(2)},${result.avgWeight.toFixed(2)},${age},"${growth}","${condition}"\n`;
+  });
+
+  const blob = new Blob([csvContent], {
+    type: 'text/csv;charset=utf-8;'
+  });
+  const link = document.createElement("a");
+  const url = URL.createObjectURL(blob);
+  link.setAttribute("href", url);
+  link.setAttribute("download", `analisis_multispecies_teripang_${location.replace(/\s+/g, '_')}.csv`);
+  link.style.visibility = 'hidden';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+// Existing functions (calculateStatistics, calculateAgeAnalysis, etc.) remain the same
 function calculateStatistics(data, property = null) {
   if (data.length === 0) {
     return { count: 0, min: 0, max: 0, avg: 0, median: 0, stdDev: 0 };
@@ -513,84 +664,105 @@ function calculateStatistics(data, property = null) {
 }
 
 function updateStatistics() {
-    // Reset all to zero/default state first
-    document.getElementById("sampleCount").textContent = "0";
-    document.getElementById("minLength").textContent = "0.00";
-    document.getElementById("maxLength").textContent = "0.00";
-    document.getElementById("avgLength").textContent = "0.00";
-    document.getElementById("median").textContent = "0.00";
-    document.getElementById("stdDev").textContent = "0.00";
+  // Reset all to zero/default state first
+  document.getElementById("sampleCount").textContent = "0";
+  document.getElementById("minLength").textContent = "0.00";
+  document.getElementById("maxLength").textContent = "0.00";
+  document.getElementById("avgLength").textContent = "0.00";
+  document.getElementById("median").textContent = "0.00";
+  document.getElementById("stdDev").textContent = "0.00";
 
-    // Default labels and units for age mode
-    document.getElementById("minLabel").textContent = "Panjang Minimum";
-    document.getElementById("maxLabel").textContent = "Panjang Maksimum";
-    document.getElementById("avgLabel").textContent = "Rata-rata Panjang";
-    document.getElementById("minUnit").textContent = "cm";
-    document.getElementById("maxUnit").textContent = "cm";
-    document.getElementById("avgUnit").textContent = "cm";
-    document.getElementById("medianUnit").textContent = "cm";
-    document.getElementById("stdUnit").textContent = "cm";
+  // Default labels and units for age mode
+  document.getElementById("minLabel").textContent = "Panjang Minimum";
+  document.getElementById("maxLabel").textContent = "Panjang Maksimum";
+  document.getElementById("avgLabel").textContent = "Rata-rata Panjang";
+  document.getElementById("minUnit").textContent = "cm";
+  document.getElementById("maxUnit").textContent = "cm";
+  document.getElementById("avgUnit").textContent = "cm";
+  document.getElementById("medianUnit").textContent = "cm";
+  document.getElementById("stdUnit").textContent = "cm";
 
-    if (csvData.length === 0) return;
+  if (csvData.length === 0) return;
 
-    if (currentMode === 'age') {
-        const stats = calculateStatistics(csvData, 'length');
-        document.getElementById("sampleCount").textContent = stats.count;
-        document.getElementById("minLength").textContent = stats.min.toFixed(2);
-        document.getElementById("maxLength").textContent = stats.max.toFixed(2);
-        document.getElementById("avgLength").textContent = stats.avg.toFixed(2);
-        document.getElementById("median").textContent = stats.median.toFixed(2);
-        document.getElementById("stdDev").textContent = stats.stdDev.toFixed(2);
-    } else if (currentMode === 'lwr' || currentMode === 'multispecies') {
-        const lengthStats = calculateStatistics(csvData, 'length');
-        const weightStats = calculateStatistics(csvData, 'weight');
+  if (currentMode === 'age') {
+    const stats = calculateStatistics(csvData, 'length');
+    document.getElementById("sampleCount").textContent = stats.count;
+    document.getElementById("minLength").textContent = stats.min.toFixed(2);
+    document.getElementById("maxLength").textContent = stats.max.toFixed(2);
+    document.getElementById("avgLength").textContent = stats.avg.toFixed(2);
+    document.getElementById("median").textContent = stats.median.toFixed(2);
+    document.getElementById("stdDev").textContent = stats.stdDev.toFixed(2);
+  } else if (currentMode === 'lwr' || currentMode === 'multispecies') {
+    const lengthStats = calculateStatistics(csvData, 'length');
+    const weightStats = calculateStatistics(csvData, 'weight');
 
-        document.getElementById("sampleCount").textContent = lengthStats.count;
-        document.getElementById("minLength").textContent = `L: ${lengthStats.min.toFixed(2)} | W: ${weightStats.min.toFixed(2)}`;
-        document.getElementById("maxLength").textContent = `L: ${lengthStats.max.toFixed(2)} | W: ${weightStats.max.toFixed(2)}`;
-        document.getElementById("avgLength").textContent = `L: ${lengthStats.avg.toFixed(2)} | W: ${weightStats.avg.toFixed(2)}`;
-        document.getElementById("median").textContent = `L: ${lengthStats.median.toFixed(2)} | W: ${weightStats.median.toFixed(2)}`;
-        document.getElementById("stdDev").textContent = `L: ${lengthStats.stdDev.toFixed(2)} | W: ${weightStats.stdDev.toFixed(2)}`;
+    document.getElementById("sampleCount").textContent = lengthStats.count;
+    document.getElementById("minLength").textContent = `L: ${lengthStats.min.toFixed(2)} | W: ${weightStats.min.toFixed(2)}`;
+    document.getElementById("maxLength").textContent = `L: ${lengthStats.max.toFixed(2)} | W: ${weightStats.max.toFixed(2)}`;
+    document.getElementById("avgLength").textContent = `L: ${lengthStats.avg.toFixed(2)} | W: ${weightStats.avg.toFixed(2)}`;
+    document.getElementById("median").textContent = `L: ${lengthStats.median.toFixed(2)} | W: ${weightStats.median.toFixed(2)}`;
+    document.getElementById("stdDev").textContent = `L: ${lengthStats.stdDev.toFixed(2)} | W: ${weightStats.stdDev.toFixed(2)}`;
 
-        // Update labels and units for LWR/Multispecies
-        document.getElementById("minLabel").textContent = "Minimum";
-        document.getElementById("maxLabel").textContent = "Maksimum";
-        document.getElementById("avgLabel").textContent = "Rata-rata";
-        document.getElementById("minUnit").textContent = "cm | g";
-        document.getElementById("maxUnit").textContent = "cm | g";
-        document.getElementById("avgUnit").textContent = "cm | g";
-        document.getElementById("medianUnit").textContent = "cm | g";
-        document.getElementById("stdUnit").textContent = "cm | g";
+    // Update labels and units for LWR/Multispecies
+    document.getElementById("minLabel").textContent = "Minimum";
+    document.getElementById("maxLabel").textContent = "Maksimum";
+    document.getElementById("avgLabel").textContent = "Rata-rata";
+    document.getElementById("minUnit").textContent = "cm | g";
+    document.getElementById("maxUnit").textContent = "cm | g";
+    document.getElementById("avgUnit").textContent = "cm | g";
+    document.getElementById("medianUnit").textContent = "cm | g";
+    document.getElementById("stdUnit").textContent = "cm | g";
+
+    // Show species count for multispecies mode
+    if (currentMode === 'multispecies') {
+      const uniqueSpecies = [...new Set(csvData.map(d => d.species))];
+      document.getElementById("stat-title").textContent = `Statistik Data Multispecies (${uniqueSpecies.length} spesies)`;
     }
+  }
 }
 
-
-function calculateAnalysis() {
-  if (csvData.length === 0) {
-    alert("Silakan unggah file CSV dengan data teripang!");
+// Modified downloadCSV function to handle multispecies
+function downloadCSV() {
+  if (calculationResults.length === 0) {
+    alert("Tidak ada data untuk diunduh. Silakan hitung analisis terlebih dahulu.");
     return;
   }
   
+  // Handle multispecies case first
   if (currentMode === 'multispecies') {
-      calculateMultispeciesAnalysis();
-  } else {
-      showLoading(true);
-      setTimeout(() => {
-        try {
-          if (currentMode === 'age') {
-            calculateAgeAnalysis();
-          } else { // This implies 'lwr' mode
-            calculateLWRAnalysis();
-          }
-        } catch (error) {
-          alert("Error dalam perhitungan: " + error.message);
-        } finally {
-          showLoading(false);
-        }
-      }, 1000);
+    downloadMultispeciesResults();
+    return;
   }
+
+  let csvContent = "";
+  let filename = "";
+
+  if (currentMode === 'age') {
+    csvContent = "Panjang (cm),Usia (tahun),Usia (bulan),Prediksi Lt+1 (cm)\n";
+    calculationResults.forEach(result => {
+      csvContent += `${result.length.toFixed(2)},${result.age.toFixed(3)},${result.ageMonths.toFixed(1)},${result.predictedLength.toFixed(2)}\n`;
+    });
+    filename = "prediksi_usia_teripang.csv";
+  } else { // This is for 'lwr' mode
+    csvContent = "Panjang (cm),Berat Aktual (g),Berat Prediksi (g),Faktor Kondisi (K)\n";
+    calculationResults.forEach(result => {
+      csvContent += `${result.length.toFixed(2)},${result.weightActual.toFixed(2)},${result.weightPredicted.toFixed(2)},${result.conditionFactor.toFixed(2)}\n`;
+    });
+    filename = "analisis_lwr_fulton_teripang.csv";
+  }
+
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement("a");
+  const url = URL.createObjectURL(blob);
+  link.setAttribute("href", url);
+  link.setAttribute("download", filename);
+  link.style.visibility = 'hidden';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 }
 
+// Age analysis calculation
 function calculateAgeAnalysis() {
   const linf = parseFloat(document.getElementById("linf").value);
   const k = parseFloat(document.getElementById("k").value);
@@ -634,6 +806,7 @@ function calculateAgeAnalysis() {
   showInterpretation();
 }
 
+// LWR analysis calculation
 function calculateLWRAnalysis() {
   // Filter data invalid
   csvData = csvData.filter(d => d.length > 0 && d.weight > 0);
@@ -678,6 +851,7 @@ function calculateLWRAnalysis() {
   showLWRInterpretation();
 }
 
+// Display age analysis results
 function displayAgeResults() {
   const tableBody = document.querySelector("#resultTable tbody");
   const tableFooter = document.getElementById("tableFooter");
@@ -689,11 +863,11 @@ function displayAgeResults() {
     const result = calculationResults[i];
     const row = document.createElement("tr");
     row.innerHTML = `
-          <td>${result.length.toFixed(2)}</td>
-          <td>${result.age.toFixed(3)}</td>
-          <td>${result.ageMonths.toFixed(1)}</td>
-          <td>${result.predictedLength.toFixed(2)}</td>
-        `;
+      <td>${result.length.toFixed(2)}</td>
+      <td>${result.age.toFixed(3)}</td>
+      <td>${result.ageMonths.toFixed(1)}</td>
+      <td>${result.predictedLength.toFixed(2)}</td>
+    `;
     tableBody.appendChild(row);
   }
 
@@ -716,23 +890,24 @@ function displayAgeResults() {
     const r2 = result.r2;
 
     regressionInfo.innerHTML = `
-          <div class="info-box">
-            <i class="fas fa-chart-line"></i>
-            <strong>Hasil Regresi Linear</strong><br>
-            Persamaan: y = ${slope.toFixed(4)}x + ${intercept.toFixed(4)}<br>
-            Koefisien Determinasi (R²) = ${r2.toFixed(4)}
-          </div>
-        `;
+      <div class="info-box">
+        <i class="fas fa-chart-line"></i>
+        <strong>Hasil Regresi Linear</strong><br>
+        Persamaan: y = ${slope.toFixed(4)}x + ${intercept.toFixed(4)}<br>
+        Koefisien Determinasi (R²) = ${r2.toFixed(4)}
+      </div>
+    `;
   } catch (error) {
     regressionInfo.innerHTML = `
-          <div class="info-box">
-            <i class="fas fa-exclamation-triangle"></i>
-            <strong>Info:</strong> Regresi linear tidak dapat dihitung dengan data ini.
-          </div>
-        `;
+      <div class="info-box">
+        <i class="fas fa-exclamation-triangle"></i>
+        <strong>Info:</strong> Regresi linear tidak dapat dihitung dengan data ini.
+      </div>
+    `;
   }
 }
 
+// Display LWR analysis results
 function displayLWRResults(a, b) {
   const tableBody = document.querySelector("#resultTable tbody");
   const tableFooter = document.getElementById("tableFooter");
@@ -744,11 +919,11 @@ function displayLWRResults(a, b) {
     const result = calculationResults[i];
     const row = document.createElement("tr");
     row.innerHTML = `
-          <td>${result.length.toFixed(2)}</td>
-          <td>${result.weightActual.toFixed(2)}</td>
-          <td>${result.weightPredicted.toFixed(2)}</td>
-          <td>${result.conditionFactor.toFixed(2)}</td>
-        `;
+      <td>${result.length.toFixed(2)}</td>
+      <td>${result.weightActual.toFixed(2)}</td>
+      <td>${result.weightPredicted.toFixed(2)}</td>
+      <td>${result.conditionFactor.toFixed(2)}</td>
+    `;
     tableBody.appendChild(row);
   }
 
@@ -771,31 +946,32 @@ function displayLWRResults(a, b) {
 
     const regressionInfo = document.getElementById("regressionResult");
     regressionInfo.innerHTML = `
-          <div class="info-box">
-            <i class="fas fa-weight-scale"></i>
-            <strong>Parameter Hubungan Panjang-Berat</strong><br>
-            Parameter a = ${a.toFixed(4)}<br>
-            Parameter b = ${b.toFixed(3)}<br>
-            Koefisien Determinasi (R²) = ${r2.toFixed(4)}<br>
-            <br>
-            <strong>Interpretasi Parameter b:</strong><br>
-            ${b < 2.5 ? "Pertumbuhan allometrik negatif (lebih memanjang)" :
-              b > 3.5 ? "Pertumbuhan allometrik positif (lebih menggemuk)" :
-              "Pertumbuhan isometrik (proporsional)"}
-          </div>
-        `;
+      <div class="info-box">
+        <i class="fas fa-weight-scale"></i>
+        <strong>Parameter Hubungan Panjang-Berat</strong><br>
+        Parameter a = ${a.toFixed(4)}<br>
+        Parameter b = ${b.toFixed(3)}<br>
+        Koefisien Determinasi (R²) = ${r2.toFixed(4)}<br>
+        <br>
+        <strong>Interpretasi Parameter b:</strong><br>
+        ${b < 2.5 ? "Pertumbuhan allometrik negatif (lebih memanjang)" :
+          b > 3.5 ? "Pertumbuhan allometrik positif (lebih menggemuk)" :
+          "Pertumbuhan isometrik (proporsional)"}
+      </div>
+    `;
   } catch (error) {
     document.getElementById("regressionResult").innerHTML = `
-          <div class="info-box">
-            <i class="fas fa-exclamation-triangle"></i>
-            <strong>Parameter Hubungan Panjang-Berat</strong><br>
-            Parameter a = ${a.toFixed(4)}<br>
-            Parameter b = ${b.toFixed(3)}
-          </div>
-        `;
+      <div class="info-box">
+        <i class="fas fa-exclamation-triangle"></i>
+        <strong>Parameter Hubungan Panjang-Berat</strong><br>
+        Parameter a = ${a.toFixed(4)}<br>
+        Parameter b = ${b.toFixed(3)}
+      </div>
+    `;
   }
 }
 
+// Render age analysis chart
 function renderAgeChart(linf, k) {
   const ctx = document.getElementById("mainChart").getContext("2d");
   if (myChart) {
@@ -877,6 +1053,7 @@ function renderAgeChart(linf, k) {
   document.getElementById("downloadChartBtn").style.display = "block";
 }
 
+// Render LWR analysis chart
 function renderLWRChart() {
   const ctx = document.getElementById("mainChart").getContext("2d");
   if (myChart) {
@@ -952,6 +1129,7 @@ function renderLWRChart() {
   document.getElementById("downloadChartBtn").style.display = "block";
 }
 
+// Update result statistics
 function updateResultStatistics() {
   if (calculationResults.length === 0) return;
 
@@ -961,67 +1139,67 @@ function updateResultStatistics() {
     const ageStats = calculateStatistics(calculationResults, 'age');
 
     statBox.innerHTML = `
-          <div class="stat-item">
-            <div class="stat-label">Jumlah Sampel</div>
-            <div class="stat-value">${ageStats.count}</div>
-          </div>
-          <div class="stat-item">
-            <div class="stat-label">Usia Minimum</div>
-            <div class="stat-value">${ageStats.min.toFixed(3)}</div>
-            <div class="stat-label">tahun</div>
-          </div>
-          <div class="stat-item">
-            <div class="stat-label">Usia Maksimum</div>
-            <div class="stat-value">${ageStats.max.toFixed(3)}</div>
-            <div class="stat-label">tahun</div>
-          </div>
-          <div class="stat-item">
-            <div class="stat-label">Rata-rata Usia</div>
-            <div class="stat-value">${ageStats.avg.toFixed(3)}</div>
-            <div class="stat-label">tahun</div>
-          </div>
-          <div class="stat-item">
-            <div class="stat-label">Median Usia</div>
-            <div class="stat-value">${ageStats.median.toFixed(3)}</div>
-            <div class="stat-label">tahun</div>
-          </div>
-          <div class="stat-item">
-            <div class="stat-label">Std Deviasi Usia</div>
-            <div class="stat-value">${ageStats.stdDev.toFixed(3)}</div>
-            <div class="stat-label">tahun</div>
-          </div>
-        `;
+      <div class="stat-item">
+        <div class="stat-label">Jumlah Sampel</div>
+        <div class="stat-value">${ageStats.count}</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">Usia Minimum</div>
+        <div class="stat-value">${ageStats.min.toFixed(3)}</div>
+        <div class="stat-label">tahun</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">Usia Maksimum</div>
+        <div class="stat-value">${ageStats.max.toFixed(3)}</div>
+        <div class="stat-label">tahun</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">Rata-rata Usia</div>
+        <div class="stat-value">${ageStats.avg.toFixed(3)}</div>
+        <div class="stat-label">tahun</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">Median Usia</div>
+        <div class="stat-value">${ageStats.median.toFixed(3)}</div>
+        <div class="stat-label">tahun</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">Std Deviasi Usia</div>
+        <div class="stat-value">${ageStats.stdDev.toFixed(3)}</div>
+        <div class="stat-label">tahun</div>
+      </div>
+    `;
 
     document.getElementById("result-stat-title").textContent = "Statistik Prediksi Usia";
   } else {
     const conditionStats = calculateStatistics(calculationResults, 'conditionFactor');
 
     statBox.innerHTML = `
-          <div class="stat-item">
-            <div class="stat-label">Jumlah Sampel</div>
-            <div class="stat-value">${conditionStats.count}</div>
-          </div>
-          <div class="stat-item">
-            <div class="stat-label">K Minimum</div>
-            <div class="stat-value">${conditionStats.min.toFixed(2)}</div>
-          </div>
-          <div class="stat-item">
-            <div class="stat-label">K Maksimum</div>
-            <div class="stat-value">${conditionStats.max.toFixed(2)}</div>
-          </div>
-          <div class="stat-item">
-            <div class="stat-label">K Rata-rata</div>
-            <div class="stat-value">${conditionStats.avg.toFixed(2)}</div>
-          </div>
-          <div class="stat-item">
-            <div class="stat-label">K Median</div>
-            <div class="stat-value">${conditionStats.median.toFixed(2)}</div>
-          </div>
-          <div class="stat-item">
-            <div class="stat-label">K Std Deviasi</div>
-            <div class="stat-value">${conditionStats.stdDev.toFixed(2)}</div>
-          </div>
-        `;
+      <div class="stat-item">
+        <div class="stat-label">Jumlah Sampel</div>
+        <div class="stat-value">${conditionStats.count}</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">K Minimum</div>
+        <div class="stat-value">${conditionStats.min.toFixed(2)}</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">K Maksimum</div>
+        <div class="stat-value">${conditionStats.max.toFixed(2)}</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">K Rata-rata</div>
+        <div class="stat-value">${conditionStats.avg.toFixed(2)}</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">K Median</div>
+        <div class="stat-value">${conditionStats.median.toFixed(2)}</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">K Std Deviasi</div>
+        <div class="stat-value">${conditionStats.stdDev.toFixed(2)}</div>
+      </div>
+    `;
 
     document.getElementById("result-stat-title").textContent = "Statistik Faktor Kondisi";
   }
@@ -1029,6 +1207,7 @@ function updateResultStatistics() {
   document.getElementById("resultsStatsCard").style.display = "block";
 }
 
+// Get classification based on species and length
 function getClassification(panjang, species) {
   const rules = classificationRules[species] || classificationRules['default'];
 
@@ -1043,31 +1222,33 @@ function getClassification(panjang, species) {
   return 'Klasifikasi tidak ditemukan';
 }
 
+// Show interpretation for age analysis
 function showInterpretation() {
   const avgLength = calculationResults.reduce((sum, r) => sum + r.length, 0) / calculationResults.length;
   const avgAge = calculationResults.reduce((sum, r) => sum + r.age, 0) / calculationResults.length;
   const classification = getClassification(avgLength, currentSpecies);
 
   let interpretationText = `
-        Hasil menunjukkan bahwa ukuran rata-rata teripang yang tertangkap adalah sekitar ${avgLength.toFixed(2)} cm. 
-        Dengan menggunakan model pertumbuhan Von Bertalanffy, diperkirakan rata-rata usia teripang pada ukuran tersebut 
-        adalah ${avgAge.toFixed(2)} tahun. Berdasarkan literatur, kemungkinan besar teripang yang anda tangkap adalah 
-        tergolong ${classification}.
-      `;
+    Hasil menunjukkan bahwa ukuran rata-rata teripang yang tertangkap adalah sekitar ${avgLength.toFixed(2)} cm. 
+    Dengan menggunakan model pertumbuhan Von Bertalanffy, diperkirakan rata-rata usia teripang pada ukuran tersebut 
+    adalah ${avgAge.toFixed(2)} tahun. Berdasarkan literatur, kemungkinan besar teripang yang anda tangkap adalah 
+    tergolong ${classification}.
+  `;
 
   if (currentSpecies && speciesDatabase[currentSpecies]) {
     const speciesData = speciesDatabase[currentSpecies];
     interpretationText = `
-          <strong>Spesies: ${currentSpecies} (${speciesData.commonName})</strong><br>
-          ${speciesData.description}<br><br>
-          ${interpretationText}
-        `;
+      <strong>Spesies: ${currentSpecies} (${speciesData.commonName})</strong><br>
+      ${speciesData.description}<br><br>
+      ${interpretationText}
+    `;
   }
 
   document.getElementById("interpretationResult").innerHTML = interpretationText;
   document.getElementById("interpretationCard").style.display = "block";
 }
 
+// Show interpretation for LWR analysis
 function showLWRInterpretation() {
   const avgCondition = calculationResults.reduce((sum, r) => sum + r.conditionFactor, 0) / calculationResults.length;
   const goodCondition = calculationResults.filter(r => r.conditionFactor >= 1).length;
@@ -1085,34 +1266,35 @@ function showLWRInterpretation() {
   }
 
   let interpretationText = `
-        <strong>Analisis Hubungan Panjang-Berat dan Faktor Kondisi Fulton:</strong><br><br>
-        
-        <strong>Faktor Kondisi Rata-rata:</strong> ${avgCondition.toFixed(2)}<br>
-        Kondisi populasi teripang secara keseluruhan dapat dikategorikan sebagai <strong>${conditionInterpretation}</strong>.<br><br>
-        
-        <strong>Distribusi Kondisi:</strong><br>
-        • Kondisi Baik (K ≥ 1.0): ${goodCondition} individu (${(goodCondition/calculationResults.length*100).toFixed(1)}%)<br>
-        • Kondisi Kurang (K < 1.0): ${poorCondition} individu (${(poorCondition/calculationResults.length*100).toFixed(1)}%)<br><br>
-        
-        <strong>Interpretasi:</strong><br>
-        Faktor Kondisi Fulton (K) menunjukkan kesehatan dan kegemukan relatif teripang. 
-        Nilai K > 1.0 menandakan kondisi yang baik dengan nutrisi yang cukup, 
-        sedangkan K < 1.0 dapat mengindikasikan stres lingkungan atau kekurangan nutrisi.
-      `;
+    <strong>Analisis Hubungan Panjang-Berat dan Faktor Kondisi Fulton:</strong><br><br>
+    
+    <strong>Faktor Kondisi Rata-rata:</strong> ${avgCondition.toFixed(2)}<br>
+    Kondisi populasi teripang secara keseluruhan dapat dikategorikan sebagai <strong>${conditionInterpretation}</strong>.<br><br>
+    
+    <strong>Distribusi Kondisi:</strong><br>
+    • Kondisi Baik (K ≥ 1.0): ${goodCondition} individu (${(goodCondition/calculationResults.length*100).toFixed(1)}%)<br>
+    • Kondisi Kurang (K < 1.0): ${poorCondition} individu (${(poorCondition/calculationResults.length*100).toFixed(1)}%)<br><br>
+    
+    <strong>Interpretasi:</strong><br>
+    Faktor Kondisi Fulton (K) menunjukkan kesehatan dan kegemukan relatif teripang. 
+    Nilai K > 1.0 menandakan kondisi yang baik dengan nutrisi yang cukup, 
+    sedangkan K < 1.0 dapat mengindikasikan stres lingkungan atau kekurangan nutrisi.
+  `;
 
   if (currentSpecies && speciesDatabase[currentSpecies]) {
     const speciesData = speciesDatabase[currentSpecies];
     interpretationText = `
-          <strong>Spesies: ${currentSpecies} (${speciesData.commonName})</strong><br>
-          ${speciesData.description}<br><br>
-          ${interpretationText}
-        `;
+      <strong>Spesies: ${currentSpecies} (${speciesData.commonName})</strong><br>
+      ${speciesData.description}<br><br>
+      ${interpretationText}
+    `;
   }
 
   document.getElementById("interpretationResult").innerHTML = interpretationText;
   document.getElementById("interpretationCard").style.display = "block";
 }
 
+// Utility functions
 function showLoading(show) {
   document.getElementById("loadingIndicator").style.display = show ? "block" : "none";
 }
@@ -1125,6 +1307,7 @@ function resetResults() {
   document.getElementById("interpretationCard").style.display = "none";
   document.getElementById("downloadChartBtn").style.display = "none";
   document.getElementById("tableFooter").style.display = "none";
+  document.getElementById("multispeciesFooter").style.display = "none";
 
   if (myChart) {
     myChart.destroy();
@@ -1138,8 +1321,11 @@ function resetForm() {
   document.getElementById("a").value = "";
   document.getElementById("b").value = "";
   document.getElementById("species").value = "";
+  document.getElementById("location").value = "";
   document.getElementById("csvInput").value = "";
   document.getElementById("fileName").textContent = "Belum ada file dipilih";
+  document.getElementById("chk-age").checked = true;
+  document.getElementById("chk-lwr").checked = true;
 
   csvData = [];
   calculationResults = [];
@@ -1169,44 +1355,4 @@ function downloadChart() {
   imageLink.download = filename;
   imageLink.href = canvas.toDataURL('image/png');
   imageLink.click();
-}
-
-function downloadCSV() {
-    if (calculationResults.length === 0) {
-        alert("Tidak ada data untuk diunduh. Silakan hitung analisis terlebih dahulu.");
-        return;
-    }
-    
-    // Handle multispecies case first
-    if (currentMode === 'multispecies') {
-        downloadMultispeciesResults();
-        return;
-    }
-
-    let csvContent = "";
-    let filename = "";
-
-    if (currentMode === 'age') {
-        csvContent = "Panjang (cm),Usia (tahun),Usia (bulan),Prediksi Lt+1 (cm)\n";
-        calculationResults.forEach(result => {
-            csvContent += `${result.length.toFixed(2)},${result.age.toFixed(3)},${result.ageMonths.toFixed(1)},${result.predictedLength.toFixed(2)}\n`;
-        });
-        filename = "prediksi_usia_teripang.csv";
-    } else { // This is for 'lwr' mode
-        csvContent = "Panjang (cm),Berat Aktual (g),Berat Prediksi (g),Faktor Kondisi (K)\n";
-        calculationResults.forEach(result => {
-            csvContent += `${result.length.toFixed(2)},${result.weightActual.toFixed(2)},${result.weightPredicted.toFixed(2)},${result.conditionFactor.toFixed(2)}\n`;
-        });
-        filename = "analisis_lwr_fulton_teripang.csv";
-    }
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute("download", filename);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
 }
