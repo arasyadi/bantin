@@ -674,6 +674,117 @@ footer {
   
   .checkbox-item {
     padding: 12px;
+    flex-direction: column;
+    align-items: flex-start;
   }
   
-  .checkbox-item
+  .checkbox-item input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+  }
+  
+  .checkbox-description {
+    font-size: 0.85rem;
+  }
+  
+  #csv-format-info pre {
+    font-size: 0.8rem;
+    padding: 8px;
+  }
+  
+  /* Multispecies table responsive */
+  #multispeciesTable {
+    font-size: 0.85rem;
+  }
+  
+  #multispeciesTable th,
+  #multispeciesTable td {
+    padding: 8px 6px;
+    word-break: break-word;
+  }
+  
+  /* Stack checkbox items on mobile */
+  .checkbox-item label {
+    gap: 3px;
+  }
+  
+  .checkbox-item label i {
+    margin-right: 6px;
+  }
+}
+
+/* Loading state improvements */
+#loadingIndicator {
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 12px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  margin: 20px 0;
+}
+
+#loadingIndicator p {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+/* Enhanced species suggestions for single species mode */
+.suggestions-container {
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+  border: none;
+  background: white;
+}
+
+.suggestion-item {
+  border-bottom: 1px solid var(--light-gray);
+  transition: background-color 0.2s ease;
+}
+
+.suggestion-item:last-child {
+  border-bottom: none;
+}
+
+.suggestion-item:hover {
+  background-color: var(--primary);
+  color: white;
+}
+
+/* Improved formula boxes */
+.formula-box {
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border: 2px solid var(--primary);
+  box-shadow: 0 2px 8px rgba(44, 111, 187, 0.1);
+}
+
+/* Better statistics display */
+.stat-item {
+  border-left: 3px solid var(--primary);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.stat-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Enhanced result tables */
+#multispeciesTable tbody tr:hover {
+  background: rgba(44, 111, 187, 0.1);
+  transform: scale(1.01);
+  transition: all 0.2s ease;
+}
+
+#resultTable tbody tr:hover {
+  background: rgba(44, 111, 187, 0.1);
+}
+
+/* Button improvements */
+.btn-calculate:focus,
+.btn-calculate:active {
+  background: var(--secondary-dark);
+  box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.3);
+}
+
+/* Pagination info styling */
+.pagination-info {
+  font-weight: 600;
+  color: var(--primary);
+}
