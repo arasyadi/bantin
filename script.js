@@ -161,6 +161,7 @@ function switchMode(mode) {
   const ageParams = document.getElementById('age-parameters');
   const lwrParams = document.getElementById('lwr-parameters');
   const multispeciesParams = document.getElementById('multispecies-params');
+  const singleSpeciesParams = document.getElementById('single-species-params');
   const resultTable = document.getElementById('resultTable');
   const multispeciesTable = document.getElementById('multispeciesTable');
 
@@ -168,11 +169,13 @@ function switchMode(mode) {
   ageParams.classList.add('hidden');
   lwrParams.classList.add('hidden');
   multispeciesParams.classList.add('hidden');
+  singleSpeciesParams.classList.add('hidden');
   resultTable.classList.add('hidden');
   multispeciesTable.classList.add('hidden');
 
   if (mode === 'age') {
     ageParams.classList.remove('hidden');
+    singleSpeciesParams.classList.remove('hidden');
     resultTable.classList.remove('hidden');
 
     document.getElementById('calculate-btn-text').textContent = 'Hitung Prediksi Usia';
@@ -182,7 +185,12 @@ function switchMode(mode) {
     
     // Update CSV format info
     document.getElementById('csv-format-info').innerHTML = `
-      <strong>Mode Prediksi Usia:</strong> File CSV harus berisi satu kolom panjang Teripang dalam satuan cm.
+      <strong>Mode Prediksi Usia:</strong> File CSV harus berisi satu kolom panjang Teripang dalam satuan cm.<br>
+      <strong>Contoh:</strong>
+      <pre>15.2
+18.5
+12.3
+20.1</pre>
     `;
 
     document.getElementById('tableHeader').innerHTML = `
@@ -194,6 +202,7 @@ function switchMode(mode) {
       </tr>`;
   } else if (mode === 'lwr') {
     lwrParams.classList.remove('hidden');
+    singleSpeciesParams.classList.remove('hidden');
     resultTable.classList.remove('hidden');
 
     document.getElementById('calculate-btn-text').textContent = 'Hitung Analisis LWR & Fulton';
@@ -203,7 +212,12 @@ function switchMode(mode) {
     
     // Update CSV format info
     document.getElementById('csv-format-info').innerHTML = `
-      <strong>Mode Analisis LWR:</strong> File CSV harus berisi dua kolom: panjang (cm) dan berat (gram).
+      <strong>Mode Analisis LWR:</strong> File CSV harus berisi dua kolom: panjang (cm) dan berat (gram).<br>
+      <strong>Contoh:</strong>
+      <pre>15.2,25.5
+18.5,42.3
+12.3,18.7
+20.1,58.2</pre>
     `;
 
     document.getElementById('tableHeader').innerHTML = `
@@ -225,7 +239,17 @@ function switchMode(mode) {
     // Update CSV format info
     document.getElementById('csv-format-info').innerHTML = `
       <strong>Mode Analisis Multispecies:</strong> File CSV harus berisi tiga kolom: spesies, panjang (cm), dan berat (gram).<br>
-      Format: <code>Holothuria scabra,15.5,25.2</code>
+      <strong>Contoh:</strong>
+      <pre>Holothuria scabra,15.2,25.5
+Holothuria atra,18.5,42.3
+Holothuria scabra,12.3,18.7
+Holothuria edulis,20.1,58.2</pre>
+      <div style="margin-top: 10px;">
+        <strong>Format yang Didukung:</strong><br>
+        • Header kolom opsional (akan diabaikan jika ada)<br>
+        • Nama spesies harus konsisten untuk setiap spesies<br>
+        • Data panjang dalam cm, berat dalam gram
+      </div>
     `;
   }
 
